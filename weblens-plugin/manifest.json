@@ -1,0 +1,28 @@
+{
+    "manifest_version": 3,
+    "name": "Quick Summarizer",
+    "version": "1.0.0",
+    "description": "Summarize selected text via keyboard shortcut and show it in a floating panel.",
+    "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
+    "host_permissions": ["<all_urls>", "https://YOUR_SERVER_HOST/*"],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["contentScript.js"],
+        "run_at": "document_idle"
+      }
+    ],
+    "commands": {
+      "summarize-selection": {
+        "suggested_key": { "default": "Alt+Shift+K" },
+        "description": "Summarize selected text"
+      }
+    },
+    "action": {
+      "default_title": "Quick Summarizer"
+    }
+  }
+  
