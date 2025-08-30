@@ -1,2 +1,3 @@
 .env
 weblens-venv/
+__pycache__/

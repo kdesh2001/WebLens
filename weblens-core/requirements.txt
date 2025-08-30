@@ -1,0 +1,9 @@
+langchain
+langchain-community
+langgraph
+huggingface_hub
+transformers
+langchain_huggingface
+fastapi
+uvicorn
+python-multipart
