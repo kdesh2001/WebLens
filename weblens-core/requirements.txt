@@ -7,3 +7,7 @@ langchain_huggingface
 fastapi
 uvicorn
 python-multipart
+duckduckgo_search
+trafilatura
+wikipedia
+arxiv
