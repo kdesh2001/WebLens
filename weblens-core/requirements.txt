@@ -4,6 +4,7 @@ langgraph
 huggingface_hub
 transformers
 langchain_huggingface
+langchain-groq
 fastapi
 uvicorn
 python-multipart

@@ -1,4 +1,3 @@
-
 import os
 from getpass import getpass
 from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
@@ -6,6 +5,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import tool
 import textwrap
+from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -22,21 +22,30 @@ def normal_func(n: int) -> int:
     """Normal function tool. Takes int input, returns a value after applying the normal function"""
     return 3*n
 
-hf_llm = HuggingFaceEndpoint(
-    repo_id="openai/gpt-oss-20b",
-    task="text-generation",
-    
-    huggingfacehub_api_token=os.environ["HUGGINGFACEHUB_API_TOKEN"],
-    max_new_tokens=1024,
+llm = ChatGroq(
+    model="openai/gpt-oss-20b",
     temperature=0.1,
-    cache=False
+    max_tokens=None,
+    timeout=None,
+    reasoning_format="hidden",
+    max_retries=2,
 )
 
-chat_llm = ChatHuggingFace(llm=hf_llm)
+# hf_llm = HuggingFaceEndpoint(
+#     repo_id="openai/gpt-oss-20b",
+#     task="text-generation",
+    
+#     huggingfacehub_api_token=os.environ["HUGGINGFACEHUB_API_TOKEN"],
+#     max_new_tokens=1024,
+#     temperature=0.1,
+#     cache=False
+# )
+
+# chat_llm = ChatHuggingFace(llm=hf_llm)
 
 SYSTEM_PROMPT = "You are a helpful assistant. You have access to following tools - spl_func and normal_func - Use them when needed."
 
-agent = create_react_agent(chat_llm, tools=[spl_func, normal_func], prompt=SYSTEM_PROMPT)
+agent = create_react_agent(llm, tools=[spl_func, normal_func], prompt=SYSTEM_PROMPT)
 
 def invoke_agent(web_content: str):
     global agent

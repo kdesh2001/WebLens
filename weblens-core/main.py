@@ -9,16 +9,6 @@ import wikipedia
 import arxiv
 import json
 
-from langchain_ollama import ChatOllama
-
-llm = ChatOllama(
-    model = "mistral:latest",
-    validate_model_on_init = True,
-    temperature = 0.3,
-    num_predict = 65536,
-    # other params ...
-)
-
 # --- 1) Web Search (DuckDuckGo: free, no key) ---
 @tool
 def web_search(query: str, max_results: int = 5, safe_search: str = "moderate") -> List[Dict[str, Any]]:
@@ -44,8 +34,10 @@ def web_search(query: str, max_results: int = 5, safe_search: str = "moderate") 
                 "published": r.get("date") or r.get("published"),
             })
 
-    print("******************************\nWeb search results:")
+    # print("******************************\nWeb search results:")
     # print(results)
+    if len(results)==0:
+        results.append("No results found.")
     return results
 
 # --- 2) News Search (DuckDuckGo News: free, no key) ---
@@ -74,8 +66,10 @@ def news_search(query: str, region: str = "wt-wt", max_results: int = 5) -> List
                 "image": r.get("image"),
                 "syndicate": r.get("syndicate"),
             })
-    print("******************************\nNews search results:")
+    # print("******************************\nNews search results:")
     # print(items)
+    if len(items)==0:
+        items.append("No results found.")
     return items
 
 # --- 3) URL Reader (Trafilatura: free, robust extraction) ---
@@ -157,6 +151,8 @@ def arxiv_search(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
             "published": r.published.isoformat() if r.published else None,
             "primary_category": r.primary_category,
         })
+    if len(results)==0:
+        results.append("No results found.")
     return results
 
 # -------------------------------------------------------------------------
@@ -170,25 +166,34 @@ import textwrap
 from dotenv import load_dotenv
 load_dotenv()
 
-# from tools import web_search, news_search, wikipedia_lookup, read_url, arxiv_search
+from langchain_groq import ChatGroq
 
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = os.getenv("HUGGINGFACEHUB_API_TOKEN") or getpass("HF token: ")
+llm = ChatGroq(
+    model="openai/gpt-oss-20b",
+    temperature=0.1,
+    max_tokens=None,
+    timeout=None,
+    reasoning_format="hidden",
+    max_retries=2,
+)
+
+# from tools import web_search, news_search, wikipedia_lookup, read_url, arxiv_search
 
 @tool
 def spl_func(n: int) -> int:
     """Special function tool. Takes int input, returns a value after applying the function"""
     return (2*n-1)**3
 
-hf_llm = HuggingFaceEndpoint(
-    repo_id="openai/gpt-oss-20b",
-    task="text-generation",
+# hf_llm = HuggingFaceEndpoint(
+#     repo_id="openai/gpt-oss-20b",
+#     task="text-generation",
     
-    huggingfacehub_api_token=os.environ["HUGGINGFACEHUB_API_TOKEN"],
-    max_new_tokens=65536,
-    temperature=0.3,
-)
+#     huggingfacehub_api_token=os.environ["HUGGINGFACEHUB_API_TOKEN"],
+#     max_new_tokens=65536,
+#     temperature=0.3,
+# )
 
-chat_llm = ChatHuggingFace(llm=hf_llm)
+# chat_llm = ChatHuggingFace(llm=hf_llm)
 
 SYSTEM_PROMPT = textwrap.dedent(
     '''
@@ -229,7 +234,8 @@ SYSTEM_PROMPT = textwrap.dedent(
     • Long text → summarize in English.  
     - If the text contains statistics, structured data, or lists:  
     • Convert them into a clean, table-like structure.  
-    - Avoid repetition, unnecessary details, or subjective interpretation.  
+    - Avoid repetition, unnecessary details, or subjective interpretation.
+    - Do not call any tool more than twice.
 
     FACT-CHECKING & CLAIM VERIFICATION RULES:
     - Detect factual statements, statistics, or claims in the passage.  
@@ -278,6 +284,7 @@ SYSTEM_PROMPT = textwrap.dedent(
 
 PROMPT = textwrap.dedent(
     '''
+    ** Do not use more than 5 tool calls (in total) **
     Text: {text}
     Summary and detailed analysis:
     '''
@@ -289,7 +296,7 @@ def invoke_agent(web_content: str):
     # conv = agent.invoke({"messages": [HumanMessage(content=PROMPT.format(text=web_content))]})
     # assistant_response = (conv["messages"][-1].content).split("assistantfinal")[-1]
     global agent
-    events = agent.stream({"messages": [HumanMessage(content=PROMPT.format(text=web_content))]})
+    events = agent.stream({"messages": [HumanMessage(content=PROMPT.format(text=web_content))]}, {"recursion_limit": 51})
 
     final_answer = None
     for event in events:
@@ -303,34 +310,15 @@ def invoke_agent(web_content: str):
                 # print("**************")
                 if isinstance(msg, AIMessage):  # capture only assistant outputs
                     final_answer = msg.content
-    assistant_response = final_answer.split("assistantfinal")[-1]
-    return assistant_response
+    # assistant_response = final_answer.split("assistantfinal")[-1]
+    return final_answer
 
 if __name__ == "__main__":
-    web_content = "Rohit Gurunath Sharma is an Indian international cricketer and the captain of the India national team in ODIs. He is also a former captain in Tests and T20Is."
+    web_content = "In the 2014 Indian general election, Modi led the BJP to a parliamentary majority, the first for a party since 1984."
     # conv = agent.invoke({"messages": [HumanMessage(content=PROMPT.format(text=web_content))]})
     # conv = agent.invoke({"messages": [HumanMessage(content="What is the value of spl_func(4) and spl_func(6) ? Call the given spl_func() tool")]})
     # assistant_response = (conv["messages"][-1].content).split("assistantfinal")[-1]
-    events = agent.stream({"messages": [HumanMessage(content=PROMPT.format(text=web_content))]})
-
-    final_answer = None
-    for event in events:
-        print("****************************************")
-        print(event)
-        if "agent" in event:
-            agent = event["agent"]
-            if "messages" in agent:
-
-                msg = agent["messages"][-1]
-                # print("**************")
-                # print(msg)
-                # print("**************")
-                if isinstance(msg, AIMessage):  # capture only assistant outputs
-                    final_answer = msg.content
-    assistant_response = final_answer.split("assistantfinal")[-1]
-    
-    # print(conv["messages"][-1].content)
-    print(assistant_response)
+    print(invoke_agent(web_content))
 
 
     ''''
