@@ -1,167 +1,5 @@
-# tools_free_search.py
-import time
-from typing import List, Optional, Dict, Any
-from langchain_core.tools import tool
-from duckduckgo_search import DDGS
-import trafilatura
-from trafilatura.settings import use_config
-import wikipedia
-import arxiv
-import json
-
-# --- 1) Web Search (DuckDuckGo: free, no key) ---
-@tool
-def web_search(query: str, max_results: int = 5, safe_search: str = "moderate") -> List[Dict[str, Any]]:
-    """
-    General web search using DuckDuckGo (no API key). Returns a list of results:
-    [{title, href, body, source, published}]  (published may be None).
-    Args:
-        query: your search query
-        max_results: number of results (1-50)
-        safe_search: "off" | "moderate" | "strict"
-    """
-
-    results = []
-    with DDGS() as ddgs:
-        for i, r in enumerate(ddgs.text(query, max_results=max_results, safesearch=safe_search)):
-            if i >= max_results:
-                break
-            results.append({
-                "title": r.get("title"),
-                "href": r.get("href"),
-                "body": r.get("body"),
-                "source": r.get("source"),
-                "published": r.get("date") or r.get("published"),
-            })
-
-    # print("******************************\nWeb search results:")
-    # print(results)
-    if len(results)==0:
-        results.append("No results found.")
-    return results
-
-# --- 2) News Search (DuckDuckGo News: free, no key) ---
-@tool
-def news_search(query: str, region: str = "wt-wt", max_results: int = 5) -> List[Dict[str, Any]]:
-    """
-    News search across many outlets via DuckDuckGo News (no API key).
-    Args:
-        query: news topic
-        region: e.g., "wt-wt" (worldwide), "in-en" (India English), "us-en"
-        max_results: number of news items (1-50)
-    Returns: [{title, href, source, snippet, published, image, syndicate}]
-    """
-
-    items = []
-    with DDGS() as ddgs:
-        for i, r in enumerate(ddgs.news(query, region=region, max_results=max_results)):
-            if i >= max_results:
-                break
-            items.append({
-                "title": r.get("title"),
-                "href": r.get("url") or r.get("href"),
-                "source": r.get("source"),
-                "snippet": r.get("excerpt") or r.get("body"),
-                "published": r.get("date") or r.get("published"),
-                "image": r.get("image"),
-                "syndicate": r.get("syndicate"),
-            })
-    # print("******************************\nNews search results:")
-    # print(items)
-    if len(items)==0:
-        items.append("No results found.")
-    return items
-
-# --- 3) URL Reader (Trafilatura: free, robust extraction) ---
-@tool
-def read_url(url: str) -> Dict[str, Any]:
-    """
-    Fetches and cleans article text from a URL. Returns:
-    {title, author, date, text, url}
-    """
-    
-    if not url.startswith("https"):
-        return {"error": "Only https links supported"}
-    
-    cfg = use_config()
-    # Grab more content, allow comments if needed
-    cfg.set("DEFAULT", "EXTRACTION_TIMEOUT", "0")
-    cfg.set("DEFAULT", "MIN_EXTRACTED_SIZE", "0")
-
-    downloaded = trafilatura.fetch_url(url, no_ssl=True)
-    if not downloaded:
-        return {"url": url, "title": None, "author": None, "date": None, "text": None, "error": "fetch_failed"}
-
-    data = trafilatura.extract(downloaded, include_comments=False, include_tables=False, with_metadata=True, config=cfg)
-    if not data:
-        return {"url": url, "title": None, "author": None, "date": None, "text": None, "error": "extract_failed"}
-
-    # Trafilatura returns JSON-ish string when with_metadata=True; use extract with metadata=True to get dict.
-    # If your version returns a string, parse with `trafilatura.extract(..., output="json")`
-    json_data = trafilatura.extract(downloaded, with_metadata=True, output_format="json", config=cfg)
-    
-    meta = {}
-    if json_data:
-        try:
-            meta = json.loads(json_data)
-        except Exception:
-            meta = {}
-
-    return {
-        "url": url,
-        "title": meta.get("title"),
-        "author": (meta.get("author", "") or meta.get("authors", "")),
-        "date": meta.get("date") or meta.get("publication_date"),
-        "text": meta.get("text"),
-    }
-
-# --- 4) Wikipedia quick lookup (free) ---
-@tool
-def wikipedia_lookup(query: str, sentences: int = 5) -> Dict[str, Any]:
-    """
-    Returns a concise summary from Wikipedia plus the canonical URL.
-    """
-    
-    wikipedia.set_lang("en")
-    try:
-        page_title = wikipedia.search(query, results=1)
-        if not page_title:
-            return {"title": None, "summary": None, "url": None}
-        page = wikipedia.page(page_title[0], auto_suggest=False, redirect=True)
-        summary = wikipedia.summary(page.title, sentences=sentences, auto_suggest=False, redirect=True)
-        return {"title": page.title, "summary": summary, "url": page.url}
-    except Exception as e:
-        return {"title": None, "summary": None, "url": None, "error": str(e)}
-
-# --- 5) ArXiv search (free) ---
-@tool
-def arxiv_search(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
-    """
-    Search arXiv for papers. Returns: [{title, authors, summary, pdf_url, published, primary_category}]
-    """
-    
-    results = []
-    search = arxiv.Search(query=query, max_results=max_results, sort_by=arxiv.SortCriterion.Relevance)
-    for r in search.results():
-        results.append({
-            "title": r.title,
-            "authors": [a.name for a in r.authors],
-            "summary": r.summary,
-            "pdf_url": r.pdf_url,
-            "published": r.published.isoformat() if r.published else None,
-            "primary_category": r.primary_category,
-        })
-    if len(results)==0:
-        results.append("No results found.")
-    return results
-
-# -------------------------------------------------------------------------
-import os
-from getpass import getpass
-from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.prebuilt import create_react_agent
-from langchain_core.tools import tool
 import textwrap
 from dotenv import load_dotenv
 load_dotenv()
@@ -177,23 +15,8 @@ llm = ChatGroq(
     max_retries=2,
 )
 
-# from tools import web_search, news_search, wikipedia_lookup, read_url, arxiv_search
+from tools import web_search, news_search, wikipedia_lookup, read_url, arxiv_search
 
-@tool
-def spl_func(n: int) -> int:
-    """Special function tool. Takes int input, returns a value after applying the function"""
-    return (2*n-1)**3
-
-# hf_llm = HuggingFaceEndpoint(
-#     repo_id="openai/gpt-oss-20b",
-#     task="text-generation",
-    
-#     huggingfacehub_api_token=os.environ["HUGGINGFACEHUB_API_TOKEN"],
-#     max_new_tokens=65536,
-#     temperature=0.3,
-# )
-
-# chat_llm = ChatHuggingFace(llm=hf_llm)
 
 SYSTEM_PROMPT = textwrap.dedent(
     '''
@@ -235,7 +58,7 @@ SYSTEM_PROMPT = textwrap.dedent(
     - If the text contains statistics, structured data, or lists:  
     • Convert them into a clean, table-like structure.  
     - Avoid repetition, unnecessary details, or subjective interpretation.
-    - Do not call any tool more than twice.
+    - **Do not call any tool more than twice.**
 
     FACT-CHECKING & CLAIM VERIFICATION RULES:
     - Detect factual statements, statistics, or claims in the passage.  
@@ -244,12 +67,7 @@ SYSTEM_PROMPT = textwrap.dedent(
     • news_search → recent news/events.  
     • wikipedia_lookup → encyclopedic background.  
     • arxiv_search → research/academic claims.  
-    - Use read_url to gather complete information when snippets are insufficient.  
-    - Always use multiple sources if possible.  
-    - Explicitly label claims as:  
-    • Verified (true),  
-    • False (contradicted by sources), or  
-    • Potentially misleading/unverified (conflicting or incomplete evidence).  
+    - Use read_url to gather complete information when snippets are insufficient.    
 
     OUTPUT REQUIREMENTS:
     - Provide a short, clear, and accurate summary of the passage.  
@@ -261,40 +79,26 @@ SYSTEM_PROMPT = textwrap.dedent(
     '''
 )
 
-# PROMPT = textwrap.dedent(
-#     """
-#     You are an expert at text summarization. Read the following text carefully and produce a summary in no more than 2-3 sentences. Your summary must:
-
-#     Capture the most crucial details and key information from the text.
-
-#     Be a highly accurate and faithful representation of the original content without distortion or omission of critical facts.
-
-#     Avoid unnecessary details, repetition, or subjective interpretation.
-
-#     If the content is in any other language, translate it into English (return full translated content as it is for short text, for long text summarise it in English.)
-
-#     If (and only if) the text contains any data, statistics or any information that can be represented well in a table, analyse the data and put it into a table like structure in your response.
-
-#     Be concise, clear, and to the point.
-
-#     Text: {text}
-#     Summary:
-#     """
-# )
 
 PROMPT = textwrap.dedent(
     '''
+    If the given text is long, provide a short, clear, and accurate summary of the passage.  
+    Translate or summarize in English if the original text is in another language.
+    If the text corresponds to some news or fact, state whether it is true, false, or misleading, citing evidence.
+    Keep the response factual, precise, and to the point. Response should not be more that 4-5 sentences.
+    You response should only have final summary, analysis, facts, etc. No need of detailed explanations and steps in the final response. 
+    Do not hallucinate. Only rely on tool results for factual verification.
+    ** Do all verification and analysis before, and then give user just the final summary of the text. **
     ** Do not use more than 5 tool calls (in total) **
+    ** KEEP YOUR WHOLE FINAL RESPONSE UNDER 5 SENTENCES !!! **
     Text: {text}
     Summary and detailed analysis:
     '''
 )
 
-agent = create_react_agent(llm, tools=[spl_func, web_search, news_search, read_url, wikipedia_lookup, arxiv_search], prompt=SYSTEM_PROMPT)
+agent = create_react_agent(llm, tools=[web_search, news_search, read_url, wikipedia_lookup, arxiv_search], prompt=SYSTEM_PROMPT)
 
 def invoke_agent(web_content: str):
-    # conv = agent.invoke({"messages": [HumanMessage(content=PROMPT.format(text=web_content))]})
-    # assistant_response = (conv["messages"][-1].content).split("assistantfinal")[-1]
     global agent
     events = agent.stream({"messages": [HumanMessage(content=PROMPT.format(text=web_content))]}, {"recursion_limit": 51})
 
@@ -305,22 +109,11 @@ def invoke_agent(web_content: str):
             if "messages" in agent:
 
                 msg = agent["messages"][-1]
-                # print("**************")
-                # print(msg)
-                # print("**************")
-                if isinstance(msg, AIMessage):  # capture only assistant outputs
+                if isinstance(msg, AIMessage):
                     final_answer = msg.content
-    # assistant_response = final_answer.split("assistantfinal")[-1]
     return final_answer
 
 if __name__ == "__main__":
     web_content = "In the 2014 Indian general election, Modi led the BJP to a parliamentary majority, the first for a party since 1984."
-    # conv = agent.invoke({"messages": [HumanMessage(content=PROMPT.format(text=web_content))]})
-    # conv = agent.invoke({"messages": [HumanMessage(content="What is the value of spl_func(4) and spl_func(6) ? Call the given spl_func() tool")]})
-    # assistant_response = (conv["messages"][-1].content).split("assistantfinal")[-1]
     print(invoke_agent(web_content))
 
-
-    ''''
-    analysisThe user: "What is the value of spl_func(4) and spl_func(6) ? Call the given spl_func() tool". The tool might return some function value. We need to call two times. We should produce two calls. Provide the values? The tool likely returns something like 343 for 4. Let's call for 6. We'll call again.assistantcommentary to=functions.spl_funcjson{"n":6}
-    '''

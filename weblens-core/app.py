@@ -8,10 +8,9 @@ from main import invoke_agent
 
 app = FastAPI()
 
-# Allow Chrome extension or any origin (tighten later if needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # you can replace with your extension origin if you know it
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
