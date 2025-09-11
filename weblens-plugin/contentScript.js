@@ -75,7 +75,7 @@ function ensurePanel() {
   card.className = "card";
   card.innerHTML = `
     <div class="header">
-      <div class="title">Quick Summarizer</div>
+      <div class="title">WebLens</div>
       <button class="close" title="Close">×</button>
     </div>
     <div class="body"><span class="muted">Preparing…</span></div>

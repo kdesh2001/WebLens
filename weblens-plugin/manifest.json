@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "Quick Summarizer",
+    "name": "WebLens",
     "version": "1.0.0",
     "description": "Summarize selected text via keyboard shortcut and show it in a floating panel.",
     "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
@@ -22,7 +22,7 @@
       }
     },
     "action": {
-      "default_title": "Quick Summarizer"
+      "default_title": "WebLens"
     }
   }
   

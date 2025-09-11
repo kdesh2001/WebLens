@@ -105,10 +105,10 @@ def invoke_agent(web_content: str):
     final_answer = None
     for event in events:
         if "agent" in event:
-            agent = event["agent"]
-            if "messages" in agent:
+            agent_msg = event["agent"]
+            if "messages" in agent_msg:
 
-                msg = agent["messages"][-1]
+                msg = agent_msg["messages"][-1]
                 if isinstance(msg, AIMessage):
                     final_answer = msg.content
     return final_answer
